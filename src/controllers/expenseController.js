@@ -11,35 +11,48 @@ const readFile = util.promisify(fs.readFile);
 const helpers = require('../helpers');
 const Indemnity = require('../models').indemnity;
 const Council = require('../models').council;
+const Remuneration = require('../models').remuneration;
 
 const ExpensesController = function () {
     const all = async (req, res) => {
         try {
-            const expenses = [];
+            let remunerations = [];
             const dataFromCsv = await readFile('src/sheets/servidores.xml', 'utf8');
             const councilsDataRows = dataFromCsv.trim().split('\n').splice(1);
 
             councilsDataRows.forEach((row) => {
-                const expense = {};
+                const remuneration = {};
                 const column = row.split(';');
 
-                // expense.cpf = column[0];
-                expense.registration = ~~column[1];
-                expense.name = column[2];
-                expense.category = column[3];
-                expense.office = column[4];
-                expense.total_advantages = helpers.formatMoney(column[5]);
-                expense.total_discounts = helpers.formatMoney(column[6]);
-                expense.total_liquid = helpers.formatMoney(column[7]);
-                
-                expenses.push(council);
+                remuneration.name = column[2];
+                remuneration.category = column[3];
+                remuneration.office = column[4];
+                remuneration.total_advantages = helpers.formatMoney(column[5]);
+                remuneration.total_discounts = helpers.formatMoney(column[6]);
+                remuneration.total_liquid = helpers.formatMoney(column[7]);
+                remuneration.date = moment().subtract(5, 'months').format('MM-YYYY');
+                remunerations.push(remuneration);
             });
 
-            await Promise.all(expenses.map(async (expense) => {
-                await Expense.create(expense);
+            await Promise.all(remunerations.map(async (remuneration) => {
+                const council = await Council.find({
+                    where: {
+                        remuneration_name: remuneration.name
+                    },
+                    raw:true,
+                    attributes: ['id']
+                });
+
+                if (council && council.id) {
+                    remuneration.council_id = council.id;
+                }
             }));
 
-            res.status(200).send(expenses);
+            remunerations = remunerations.filter(remuneration => remuneration.council_id);
+
+            await Remuneration.bulkCreate(remunerations)
+
+            res.status(200).send(remunerations);
         }
         catch
             (err) {
@@ -81,7 +94,7 @@ const ExpensesController = function () {
                     glosed: 0
                 };
                 indemnity.name = councilSheet.name.trim();
-                indemnity.date = moment().subtract(2, 'months').format('MM-YYYY')
+                indemnity.date = moment().subtract(2, 'months').format('MM-YYYY');
 
                 councilSheet.data.forEach((row) => {
                     if (/Aluguel de Escrit.*rio/.test(row)) {
@@ -125,7 +138,7 @@ const ExpensesController = function () {
             await Promise.all(indemnities.map(async (indemnity) => {
                 const council = await Council.find({
                     where: {
-                        finance_name: indemnity.name
+                        indemnity_name: indemnity.name
                     },
                     raw:true,
                     attributes: ['id']

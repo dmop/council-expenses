@@ -13,7 +13,10 @@ module.exports = {
       civil_name: {
         type: DataTypes.STRING,
       },
-      finance_name: {
+      remuneration_name: {
+        type: DataTypes.STRING,
+      },
+      indemnity_name: {
         type: DataTypes.STRING,
       },
       party: {
