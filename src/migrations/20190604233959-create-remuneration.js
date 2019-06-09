@@ -7,12 +7,6 @@ module.exports = {
         primaryKey: true,
         type: DataTypes.INTEGER,
       },
-      category: {
-        type: DataTypes.STRING,
-      },
-      office: {
-        type: DataTypes.STRING,
-      },
       total_advantages: {
         type: DataTypes.FLOAT,
       },

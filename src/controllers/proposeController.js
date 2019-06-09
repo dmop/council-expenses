@@ -13,7 +13,7 @@ const iso88515 = require('iso-8859-15');
 
 const ProposeController = function () {
     const legislative = async (req, res) => {
-        try {
+        try {   
             const councils = [];
             const proposes = [];
             const councilCode = 120;
