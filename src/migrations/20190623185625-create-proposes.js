@@ -1,11 +1,23 @@
 module.exports = {
   up: (queryInterface, DataTypes) => {
-    return queryInterface.createTable('plenary_sessions', {
+    return queryInterface.createTable('proposes', {
       id: {
         allowNull: false,
         autoIncrement: true,
         primaryKey: true,
         type: DataTypes.INTEGER,
+      },
+      year: {
+        type: DataTypes.INTEGER,
+      },
+      description: {
+        type: DataTypes.TEXT,
+      },
+      url: {
+        type: DataTypes.STRING,
+      },
+      name: {
+        type: DataTypes.STRING,
       },
       type: {
         type: DataTypes.STRING,
@@ -13,17 +25,15 @@ module.exports = {
       code: {
         type: DataTypes.INTEGER,
       },
-      date: {
-        type: DataTypes.STRING,
-      },
-      name: {
-        type: DataTypes.STRING,
-      },
-      start_hour: {
-        type: DataTypes.STRING,
-      },
-      end_hour: {
-        type: DataTypes.STRING,
+      council_id: {
+        type: DataTypes.INTEGER,
+        onDelete: 'CASCADE',
+        allowNull: false,
+        references: {
+            model: 'councils',
+            key: 'id',
+            as: 'council_id',
+        },
       },
       createdAt: {
         allowNull: false,
@@ -37,6 +47,6 @@ module.exports = {
   },
 
   down: (queryInterface) => {
-    return queryInterface.dropTable('plenary_sessions');
+    return queryInterface.dropTable('proposes');
   }
 };

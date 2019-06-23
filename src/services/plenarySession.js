@@ -4,13 +4,13 @@ const axios = require('axios');
 const moment = require('moment');
 const cheerio = require('cheerio')
 const iso88515 = require('iso-8859-15');
+const {timeoutDelay} = require('../helpers');
 const Council = require('../models').council;
 const {SAPL_URL} = require('../helpers/constants');
-const {timeoutDelay} = require('../helpers');
 const PlenarySession = require('../models').plenary_session;
+const CouncilPlenarySessionPresence = require('../models').council_plenary_session_presence;
 
 const PlenarySessionService = function () {
-
     const getSession = async (sessionLink, councilsInfo) => {
         try {
             const response = await axios.request({
@@ -22,11 +22,8 @@ const PlenarySessionService = function () {
             const htmlPage = iso88515.decode(response.data.toString('binary')); 
             const $ = cheerio.load(htmlPage);
             const session = {};
-            const missing = [];
             const present = [];
     
-            console.log( `${SAPL_URL}/consultas/sessao_plenaria/${sessionLink}`);
-
             session.code = sessionLink.match(/agenda_sessao_plen_mostrar_proc\?cod_sessao_plen=(.*)&dat_sessao=.*/)[1];
             
             session.date = sessionLink.match(/agenda_sessao_plen_mostrar_proc\?cod_sessao_plen=.*&dat_sessao=(.*)/)[1];
@@ -60,16 +57,7 @@ const PlenarySessionService = function () {
                 });
             }
     
-            Object.keys(councilsInfo).forEach((councilName) => {
-                const councilId = councilsInfo[councilName];
-    
-                if (!present.includes(councilId)) {
-                    missing.push(councilId);
-                }
-            });
-    
             session.present = JSON.stringify(present);
-            session.missing = JSON.stringify(missing);
     
             return session;
         } catch (err) {
@@ -85,6 +73,8 @@ const PlenarySessionService = function () {
             const sessionsDates = [];
             const sessionsLinks = [];
             const councilsInfo = {};
+            const councilsIds = [];
+            const councilPresences = [];
             const response = await axios.request({
                 method: 'GET',
                 url: `${SAPL_URL}/consultas/sessao_plenaria/sessao_plenaria_index_html`,
@@ -102,7 +92,8 @@ const PlenarySessionService = function () {
             });
 
             councils.forEach((council) => {
-                councilsInfo[council.name] = council.id 
+                councilsInfo[council.name] = council.id;
+                councilsIds.push(council.id);
             });
 
             $('#lst_dat_sessao').children().each((i, elem) => {
@@ -136,24 +127,32 @@ const PlenarySessionService = function () {
                 }
             }));
 
-            try {
-                await Promise.all(sessionsLinks.map(async (sessionLink) => {
-                    const session = await getSession(sessionLink, councilsInfo);
-                    sessions.push(session);
-                }));
-            } catch (err) {
-                console.log(err);
-            }
+            await Promise.all(sessionsLinks.map(async (sessionLink) => {
+                const session = await getSession(sessionLink, councilsInfo);
+                sessions.push(session);
+            }));
 
-            await PlenarySession.bulkCreate(sessions);
+            await Promise.all(sessions.map(async (session) => {
+                const plenarySession = await PlenarySession.create(session);
 
-            res.status(200).send(
-                sessions
-            );
+                councilsIds.forEach((councilId) => {
+                    const councilPresence = {};
+
+                    councilPresence.council_id = councilId;
+                    councilPresence.plenary_session_id = plenarySession.id;
+                    councilPresence.present = session.present.includes(councilId);
+                    councilPresences.push(councilPresence);
+                })
+            }));
+    
+            await CouncilPlenarySessionPresence.bulkCreate(councilPresences);
+
+            res.status(200).send({
+                success: true
+            });
         }
 
         catch (err) {
-            console.log(err);
             res.status(400)
                 .send({
                     message: err.message,

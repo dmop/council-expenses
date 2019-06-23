@@ -1,19 +1,20 @@
 'use strict';
+
 module.exports = (sequelize, DataTypes) => {
     const Propose = sequelize.define('propose', {
+        year: DataTypes.INTEGER,
+        description: DataTypes.STRING,
+        url:  DataTypes.STRING,
+        name: DataTypes.STRING,
         type: DataTypes.STRING,
-        number: DataTypes.STRING,
-        date: DataTypes.STRING,
-        number: DataTypes.INTEGER,
-        in_process: DataTypes.BOOLEAN,
-        is_controversial: DataTypes.BOOLEAN,
-        procedure_regime: DataTypes.STRING,
+        code: DataTypes.INTEGER
     }, {});
     Propose.associate = (models) => {
-        Propose.belongsTo(models.Council, {
+        Propose.belongsTo(models.council, {
             foreignKey: 'council_id',
             onDelete: 'CASCADE',
         });
     };
+
     return Propose;
 };

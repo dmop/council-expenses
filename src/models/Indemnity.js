@@ -1,4 +1,5 @@
 'use strict';
+
 module.exports = (sequelize, DataTypes) => {
     const Indemnity = sequelize.define('indemnity', {
         office_rent: DataTypes.FLOAT,
@@ -25,5 +26,6 @@ module.exports = (sequelize, DataTypes) => {
             onDelete: 'CASCADE'
         });
     };
+
     return Indemnity;
 };

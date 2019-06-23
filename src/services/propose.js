@@ -1,57 +1,15 @@
 'use strict';
 
-const _ = require('lodash');
 const axios = require('axios');
 const cheerio = require('cheerio')
 const moment = require('moment');
-const xlsx = require('node-xlsx');
-const fs = require('fs');
-const util = require('util');
-const readFile = util.promisify(fs.readFile);
-const helpers = require('../helpers');
 const iso88515 = require('iso-8859-15');
 const querystring = require('querystring');
+const Council = require('../models').council;
+const Propose = require('../models').propose;
+const {SAPL_URL} = require('../helpers/constants');
 
 const ProposeService = function () {
-    const legislative = async (req, res) => {
-        try {   
-            const councils = [];
-            const proposes = [];
-            const councilCode = 120;
-            let numberOfPages = 1;
-
-            for (let currentPage = 1; currentPage <= numberOfPages; currentPage++) {
-                const url = `http://sapl.recife.pe.leg.br/generico/materia_pesquisar_proc?page=${currentPage}&step=8&txt_relator=&txt_numero=&dt_public2=&lst_tip_autor=Parlamentar&txt_num_protocolo=&hdn_txt_autor=&txt_ano=&hdn_cod_autor=${councilCode}&lst_localizacao=&lst_tip_materia=6&txt_assunto=&btn_materia_pesquisar=Pesquisar&incluir=0&lst_cod_partido=&dt_apres2=&chk_coautor=0&txt_npc=&lst_status=&dt_public=&rd_ordenacao=1&rad_tramitando=&existe_ocorrencia=0&dt_apres=`;
-                const response = await axios.get(url);
-                const $ = cheerio.load(response.data);
-                let selectorNumberOfPages = $('#conteudo > fieldset > table > tbody > tr:nth-child(18) > td > b').text();
-            
-                if (selectorNumberOfPages.match(/P.*ginas[\s\S]*\((.*)\):/) &&  selectorNumberOfPages.match(/P.*ginas[\s\S]*\((.*)\):/)[1]) {
-                    numberOfPages = ~~selectorNumberOfPages.match(/P.*ginas[\s\S]*\((.*)\):/)[1];
-                }
-
-                $('#conteudo > fieldset > table > tbody > tr').each((i, elem) => {
-                    const url = $(elem).children().first().children().first().attr('href');
-                    
-                    if (url && !proposes.includes(url)) {
-                        proposes.push(url);
-                    }
-                });
-            }            
-
-            res.status(200).send(proposes);
-        }
-        catch
-            (err) {
-            console.log(err);
-            res.status(400)
-                .send({
-                    message: err.message,
-                    error: true
-                });
-        }
-    };
-
     const proposeInfo = async (url) => {
         console.log(url)
         // const url = `http://sapl.recife.pe.leg.br/consultas/materia/materia_mostrar_proc?cod_materia=${proposeCode}`;
@@ -93,23 +51,28 @@ const ProposeService = function () {
         return propose;
     };
 
-    const pastProposes = async (req, res) => {
+    const index = async (req, res) => {
         try {
-            const currentPastYear = moment('2019-01-01');
-            const today = moment();
-            const councilsInfo = {};
             const proposes = [];
-            const urls = [];
-            let data;
+            const currentPastYear = moment('2017-01-01');
+            const councilsInfo = {};
+            const today = moment();
+            const councils = await Council.findAll({
+                where: {
+                    active: true
+                },
+                raw: true,
+                attributes: ['id', 'civil_name']
+            });
+
+            councils.forEach((council) => {
+                councilsInfo[council.civil_name] = council.id;
+            });
 
             while (currentPastYear.format('YYYY') <= today.format('YYYY')) {
-                const url = 'http://sapl.recife.pe.leg.br/relatorios_administrativos/resumoPropositurasAutor/resumoPropositurasAutor_index_html';
-                let response;
-                let $;
-
-                response = await axios.request({
+                const response = await axios.request({
                     method: 'POST',
-                    url: url,
+                    url: `${SAPL_URL}/relatorios_administrativos/resumoPropositurasAutor/resumoPropositurasAutor_index_html`,
                     responseType: 'arraybuffer',
                     responseEncoding: 'binary',
                     headers: {
@@ -128,43 +91,55 @@ const ProposeService = function () {
                         selAno: currentPastYear.format('YYYY')
                     })
                 });
-                
-                data = iso88515.decode(response.data.toString('binary'));
-                $ = cheerio.load(data);
+                const htmlPage = iso88515.decode(response.data.toString('binary'));
+                const $ = cheerio.load(htmlPage);
+                let councilId;
 
                 $('#conteudo > fieldset > table > tbody > tr').each((i, elem) => {
-                    let url;
-                    
-                    if (!/\/(20[0-8][0-9]|209[0-9])/.test($(elem).text())) {
+                    const text = $(elem).text().trim();
+                    const propose = {};
+
+                    if (councilsInfo[text]) {
+                        councilId = councilsInfo[text];
+                    }
+
+                    if (!/\/201[7-9]/.test(text)) {
                         return;
                     }
 
-                    url = $(elem).children().first().children().first().attr('href').trim();
-                    urls.push(url);
+                    propose.year = ~~currentPastYear.format('YYYY');
+                    propose.description = $(elem).children().last().text().trim();
+                    propose.url = $(elem).children().first().children().first().attr('href');
+                    propose.name = $(elem).children().first().children().first().text().trim();
+                    propose.type = propose.name.split(/[0-9]/)[0].trim();
+                    propose.code = ~~propose.url.match(/http:\/\/sapl\.recife\.pe\.leg\.br\/consultas\/materia\/materia_mostrar_proc\?cod_materia=(.*)/)[1];
+                    propose.council_id = councilId;
+
+                    proposes.push(propose);
                 });
-                
-                currentPastYear.add(1,'year');
+
+                currentPastYear.add(1, 'year');
             }
+    
+            await Propose.bulkCreate(proposes);
 
-            await Promise.all(urls.map(async (url) => {
-                const propose = await proposeInfo(url);
-                helpers.timeoutDelay(1000);
-                proposes.push(propose);
-            }));
+            res.status(200).send({
+                success: true
+            });
+        }            
 
-            res.status(200).send(proposes);
-        }
         catch (err) {
-            console.log(err);
             res.status(400)
                 .send({
                     message: err.message,
                     error: true
                 });
         }
-    };
+
+    }
+
     return {
-        pastProposes
+        index
     }
 };
 

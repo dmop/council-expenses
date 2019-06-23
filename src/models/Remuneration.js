@@ -1,4 +1,5 @@
 'use strict';
+
 module.exports = (sequelize, DataTypes) => {
     const Remuneration = sequelize.define('remuneration', {
         total_advantages: DataTypes.FLOAT,
@@ -12,5 +13,6 @@ module.exports = (sequelize, DataTypes) => {
             onDelete: 'CASCADE',
         });
     };
+
     return Remuneration;
 };
