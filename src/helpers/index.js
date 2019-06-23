@@ -9,6 +9,9 @@ const formatMoney = (price) => {
     return +price.replace(',','.');
 };
 
+const timeoutDelay = ms => new Promise(res => setTimeout(res, ms));
+
 module.exports = {
-    formatMoney
+    formatMoney,
+    timeoutDelay
 };

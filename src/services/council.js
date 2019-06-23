@@ -1,21 +1,23 @@
 'use strict';
+
 const axios = require('axios');
 const cheerio = require('cheerio')
 const iso88515 = require('iso-8859-15');
 const Council = require('../models').council;
+const {SAPL_URL} = require('../helpers/constants');
 
-const CouncilController = function () {
+const CouncilService = function () {
     const index = async (req, res) => {
         try {
             const councils = [];
             const response = await axios.request({
                 method: 'GET',
-                url: 'http://sapl.recife.pe.leg.br/consultas/parlamentar/parlamentar_index_html',
+                url: `${SAPL_URL}/consultas/parlamentar/parlamentar_index_html`,
                 responseType: 'arraybuffer',
                 responseEncoding: 'binary'
             });
-            const data = iso88515.decode(response.data.toString('binary'));
-            const $ = cheerio.load(data);
+            const htmlPage = iso88515.decode(response.data.toString('binary'));
+            const $ = cheerio.load(htmlPage);
 
             $('#parlamentares > tbody > tr').each((i, elem) => {
                 const council = {};
@@ -29,29 +31,28 @@ const CouncilController = function () {
             });
 
             await Promise.all(councils.map(async (council) => {
-                const html = await axios.request({
+                const response = await axios.request({
                     method: 'GET',
-                    url: `http://sapl.recife.pe.leg.br/consultas/parlamentar/parlamentar_mostrar_proc?cod_parlamentar=${council.code}`,
+                    url: `${SAPL_URL}/consultas/parlamentar/parlamentar_mostrar_proc?cod_parlamentar=${council.code}`,
                     responseType: 'arraybuffer',
                     responseEncoding: 'binary'
                 });
-                const data = iso88515.decode(html.data.toString('binary'));
-                const $ = cheerio.load(data);
+                const htmlPage = iso88515.decode(response.data.toString('binary'));
+                const $ = cheerio.load(htmlPage);
 
                 council.birthday = $('#texto-parlamentar > b:nth-child(5)').text().trim();
                 council.phone = $('#texto-parlamentar > b:nth-child(7)').text().trim();
                 council.email = $('#texto-parlamentar > b:nth-child(9) > a').text().trim();
-            }))
-
-            await Promise.all(councils.map(async (council) => {
-                await Council.create(council);
             }));
 
-            res.status(200).send(councils);
+            await Council.bulkCreate(councils);
+
+            res.status(200).send({
+                success: true
+            });
         }
-        catch
-            (err) {
-            console.log(err);
+
+        catch (err) {
             res.status(400)
                 .send({
                     message: err.message,
@@ -65,4 +66,4 @@ const CouncilController = function () {
     }
 };
 
-module.exports = CouncilController;
+module.exports = CouncilService;

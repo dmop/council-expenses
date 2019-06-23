@@ -1,10 +1,9 @@
-// "use strict";
+"use strict";
 
-// const express = require("express");
-// const router = express.Router();
-// const expenses = require("../src/controllers/expenseController")();
+const express = require("express");
+const router = express.Router();
+const propose = require("../src/controllers/proposeController")();
 
-// router.get("/", expenses.index);
-// router.get("/all", expenses.all);
+router.get("/pastProposes", propose.pastProposes);
 
-// module.exports = router;
+module.exports = router;

@@ -1,23 +1,23 @@
 'use strict';
 
-const _ = require('lodash');
+const fs = require('fs');
+const util = require('util');
 const axios = require('axios');
 const moment = require('moment');
 const xlsx = require('node-xlsx');
-const fs = require('fs');
-const util = require('util');
 const helpers = require('../helpers');
 const Council = require('../models').council;
-const Remuneration = require('../models').remuneration;
 const readFile = util.promisify(fs.readFile);
 const writeFile = util.promisify(fs.writeFile);
+const {FILES_FOLDER} = require('../helpers/constants');
+const Remuneration = require('../models').remuneration;
 
-const RemunerationController = function () {
+const RemunerationService = function () {
     const pastRemunerations = async (req, res) => {
         try {
             const currentPastYear = moment('2017-01-01');
-            const today = moment();
             const councilsInfo = {};
+            const today = moment();
             let remunerations = [];
             let councils;
 
@@ -45,9 +45,9 @@ const RemunerationController = function () {
                         }
                     });
 
-                    await writeFile(`src/sheets/remunerations/${currentPastYear.format('YYYY')}-${currentMonthKey.toString().padStart(2, 0)}.xls`, response.data);
+                    await writeFile(`${FILES_FOLDER}/remunerations/${currentPastYear.format('YYYY')}-${currentMonthKey.toString().padStart(2, 0)}.xls`, response.data);
 
-                    dataFromXlsx = await readFile(`src/sheets/remunerations/${currentPastYear.format('YYYY')}-${currentMonthKey.toString().padStart(2, 0)}.xls`);
+                    dataFromXlsx = await readFile(`${FILES_FOLDER}/remunerations/${currentPastYear.format('YYYY')}-${currentMonthKey.toString().padStart(2, 0)}.xls`);
                     rawData = xlsx.parse(dataFromXlsx);
 
                     rawData = rawData[0].data.slice(5);
@@ -88,14 +88,14 @@ const RemunerationController = function () {
 
             remunerations = remunerations.filter(remuneration => remuneration.council_id);
 
-            await Promise.all(remunerations.map(async (remuneration) => {
-                await Remuneration.create(remuneration);
-            }));
+            await Remuneration.bulkCreate(remunerations);
 
-            res.status(200).send(remunerations);
+            res.status(200).send({
+                success: true
+            });
         }
+
         catch (err) {
-            console.log(err);
             res.status(400)
                 .send({
                     message: err.message,
@@ -109,4 +109,4 @@ const RemunerationController = function () {
     }
 };
 
-module.exports = RemunerationController;
+module.exports = RemunerationService;

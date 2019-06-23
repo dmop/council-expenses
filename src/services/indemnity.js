@@ -1,21 +1,22 @@
 'use strict';
 
+const fs = require('fs');
+const util = require('util');
 const axios = require('axios');
 const moment = require('moment');
 const xlsx = require('node-xlsx');
-const fs = require('fs');
-const util = require('util');
-const Indemnity = require('../models').indemnity;
 const Council = require('../models').council;
 const readFile = util.promisify(fs.readFile);
 const writeFile = util.promisify(fs.writeFile);
+const Indemnity = require('../models').indemnity;
+const {INDEMNITY_URL} = require('../helpers/constants');
 
-const IndemnityController = function () {
+const IndemnityService = function () {
     const pastIndemnities = async (req, res) => {
         try {
             const currentPastYear = moment('2017-01-01');
-            const today = moment();
             const councilsInfo = {};
+            const today = moment();
             let indemnities = [];
             let dataFromXlsx;
             let councils;
@@ -29,26 +30,26 @@ const IndemnityController = function () {
                 let url;
 
                 if (~~currentPastYear.format('YYYY') === 2017) {
-                    url = 'http://www.recife.pe.leg.br/portal-da-transparencia/verba-indenizatoria-1/dezembro-2017';
+                    url = `${INDEMNITY_URL}/dezembro-2017`;
                 }
 
                 if (~~currentPastYear.format('YYYY') === 2018) {
-                    url = 'http://www.recife.pe.leg.br/portal-da-transparencia/verba-indenizatoria-1/dezembro';
+                    url = `${INDEMNITY_URL}/dezembro`;
                 }
 
                 if (~~currentPastYear.format('YYYY') === 2019) {
-                    url = `http://www.recife.pe.leg.br/portal-da-transparencia/verba-indenizatoria-1/abril-1`;
+                    url = `${INDEMNITY_URL}/abril-1`;
                     limitMonthKey = 4;
                 }
 
                 response = await axios.request({
-                        method: 'GET',
-                        url: url,
-                        responseType: 'arraybuffer',
-                        responseEncoding: 'binary',
-                        headers: {
-                            'Content-Type': 'blob'
-                        }
+                    method: 'GET',
+                    url: url,
+                    responseType: 'arraybuffer',
+                    responseEncoding: 'binary',
+                    headers: {
+                        'Content-Type': 'blob'
+                    }
                 });
 
                 await writeFile(`src/sheets/indemnitys/${currentDateKey}.xlsx`, response.data);
@@ -127,7 +128,7 @@ const IndemnityController = function () {
             }
 
             councils = await Council.findAll({
-                raw:true,
+                raw: true,
                 attributes: ['id', 'indemnity_name']
             });
 
@@ -141,14 +142,14 @@ const IndemnityController = function () {
 
             indemnities = indemnities.filter(indemnity => indemnity.council_id);
 
-            await Promise.all(indemnities.map(async (indemnity) => {
-                await Indemnity.create(indemnity);
-            }));
+            await Indemnity.bulkCreate(indemnities);
 
-            res.status(200).send(indemnities);
+            res.status(200).send({
+                success: true
+            });
         }
+
         catch (err) {
-            console.log(err);
             res.status(400)
                 .send({
                     message: err.message,
@@ -162,4 +163,4 @@ const IndemnityController = function () {
     }
 };
 
-module.exports = IndemnityController;
+module.exports = IndemnityService;
