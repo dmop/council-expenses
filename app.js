@@ -15,8 +15,8 @@ app.use(morgan('dev'));
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
-require('./routes')(app); //Routes
+require('./routes')(app);
 
-server.listen(PORT,() => {
+server.listen(PORT, () => {
     console.log(`Council Expenses API has been started on http://localhost:${PORT}`);
 });
